@@ -39,6 +39,7 @@ int8_t TMAG5273::begin(uint8_t sensorAddress, TwoWire &wirePort)
     // Makes sure the TMAG will acknowledge over I2C along with matching Device ID's
     if (isConnected() != 0)
     {
+        Serial.println("Device not found on this address.");
         return 0;
     }
 
@@ -54,36 +55,35 @@ int8_t TMAG5273::begin(uint8_t sensorAddress, TwoWire &wirePort)
     // Check if there is any issue with the device status register
     if (getError() != 0)
     {
+        Serial.println("Device error.");
         return 0;
     }
 
     // Check the low active current mode (0)
     if (getLowPower() != TMAG5273_LOW_ACTIVE_CURRENT_MODE)
     {
+        Serial.println("getLowPower failed.");
         return 0;
     }
 
     // Check the operating mode to make sure it is set to continuous measure (0X2)
     if (getOperatingMode() != TMAG5273_CONTINUOUS_MEASURE_MODE)
     {
+        Serial.println("getOperatingMode failed.");
         return 0;
     }
 
     // Check that all magnetic channels have been enables(0X7)
     if (getMagneticChannel() != TMAG5273_X_Y_Z_ENABLE)
     {
+        Serial.println("getMagneticChannel failed.");
         return 0;
     }
 
     // Check that the temperature data acquisition has been enabled
     if (getTemperatureEN() != TMAG5273_TEMPERATURE_ENABLE)
     {
-        return 0;
-    }
-
-    // Check that X and Y angle calculation is disabled
-    if (getAngleEn() != TMAG5273_NO_ANGLE_CALCULATION)
-    {
+        Serial.println("getTemperatureEN failed.");
         return 0;
     }
 
@@ -101,12 +101,15 @@ int8_t TMAG5273::isConnected()
     _i2cPort->beginTransmission(_deviceAddress);
     if (_i2cPort->endTransmission() != 0)
     {
+        Serial.println("Device did not acknowledge! Please check wiring.");
         return -1;
     }
 
     if (getManufacturerID() != TMAG5273_DEVICE_ID_VALUE)
     {
-        return -1;
+        Serial.print("Incorrect Device ID: ");
+        Serial.println(getManufacturerID(), HEX);
+        return -2;
     }
 
     return 0;
@@ -122,20 +125,20 @@ int8_t TMAG5273::readRegisters(uint8_t regAddress, uint8_t *dataBuffer, uint8_t 
 {
     // uint8_t _deviceAddress = 0X22;
     //  Jump to desired register address
-    Wire.beginTransmission(_deviceAddress);
-    Wire.write(regAddress);
-    if (Wire.endTransmission())
+   _i2cPort->beginTransmission(_deviceAddress);
+   _i2cPort->write(regAddress);
+    if (_i2cPort->endTransmission())
     {
         return -1;
     }
 
     // Read bytes from these registers
-    Wire.requestFrom(_deviceAddress, numBytes);
+   _i2cPort->requestFrom(_deviceAddress, numBytes);
 
     // Store all requested bytes
-    for (uint8_t i = 0; i < numBytes && Wire.available(); i++)
+    for (uint8_t i = 0; i < numBytes &&_i2cPort->available(); i++)
     {
-        dataBuffer[i] = Wire.read();
+        dataBuffer[i] =_i2cPort->read();
     }
 
     return 0;
@@ -150,19 +153,19 @@ int8_t TMAG5273::writeRegisters(uint8_t regAddress, uint8_t *dataBuffer, uint8_t
 {
     // uint8_t _deviceAddress = 0X22;
     //  Begin transmission
-    Wire.beginTransmission(_deviceAddress);
+   _i2cPort->beginTransmission(_deviceAddress);
 
     // Write the address
-    Wire.write(regAddress);
+   _i2cPort->write(regAddress);
 
     // Write all the data
     for (uint8_t i = 0; i < numBytes; i++)
     {
-        Wire.write(dataBuffer[i]);
+       _i2cPort->write(dataBuffer[i]);
     }
 
     // End transmission
-    if (Wire.endTransmission())
+    if (_i2cPort->endTransmission())
     {
         return -1;
     }
@@ -175,9 +178,9 @@ int8_t TMAG5273::writeRegisters(uint8_t regAddress, uint8_t *dataBuffer, uint8_t
 /// @return Value of the register chosen to be read from
 uint8_t TMAG5273::readRegister(uint8_t regAddress)
 {
-    uint8_t regVal = 0;
-    readRegisters(regAddress, &regVal, 2);
-    return regVal;
+    uint8_t regVal[3] = {0};
+    readRegisters(regAddress, regVal, 3);
+    return regVal[0];
 }
 
 /// @brief Reads a register region from a device.
